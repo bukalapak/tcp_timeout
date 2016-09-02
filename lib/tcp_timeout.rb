@@ -83,7 +83,7 @@ module TCPTimeout
       end
     end
 
-    def read(length = nil, *args)
+    def read(length = 0, *args)
       raise ArgumentError, 'too many arguments' if args.length > 2
 
       timeout = (args.length > 1) ? args.pop : @read_timeout
@@ -120,6 +120,44 @@ module TCPTimeout
           length -= @chunk.bytesize
           return buffer if length <= 0
         end
+      end
+    end
+
+    def readline(sep = "\n", *args)
+      raise ArgumentError, 'too many arguments' if args.length > 2
+
+      sep_size = sep.size
+
+      timeout = (args.length > 1) ? args.pop : @read_timeout
+
+      buffer = args.first || ''.force_encoding(Encoding::ASCII_8BIT)
+
+      begin
+        # Drain internal buffers
+        @socket.read_nonblock(sep_size, buffer)
+        return buffer if buffer == sep
+      rescue Errno::EWOULDBLOCK
+        # Internal buffers were empty
+        buffer.clear
+      rescue EOFError
+        return nil
+      end
+
+      @chunk ||= ''.force_encoding(Encoding::ASCII_8BIT)
+
+      loop do
+        timeout = select_timeout(:read, timeout)
+
+        begin
+          @socket.read_nonblock(1, @chunk)
+        rescue Errno::EWOULDBLOCK
+          retry
+        rescue EOFError
+          return buffer.empty? ? nil : buffer
+        end
+        buffer << @chunk
+        size = buffer.length
+        return buffer if buffer[(size - sep_size)..(size - 1)] == sep
       end
     end
 
