@@ -102,6 +102,8 @@ module TCPTimeout
         return nil
       end
 
+      length -= buffer.bytesize
+
       @chunk ||= ''.force_encoding(Encoding::ASCII_8BIT)
 
       loop do
